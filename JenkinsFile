@@ -1,0 +1,103 @@
+pipeline {
+    /* ========== AGENT SECTION ========== */
+    agent any
+    // 'any' means it can run on any available Jenkins agent (node)
+    // You can also specify a label like: agent { label 'windows' }
+
+    triggers {
+      cron('0 06 * * *')
+    }
+
+    /* ========== TOOLS SECTION ========== */
+    tools {
+        // Automatically install Git and Maven if configured under Jenkins -> Global Tool Configuration
+        jdk 'JDK17'
+        git 'Default'     // Optional if you’ve already configured Git
+        maven 'Maven' // Replace with the name you configured for Maven
+    }
+
+    /* ========== ENVIRONMENT SECTION ========== */
+    environment {
+        // Define any global variables or credentials here
+        GIT_URL = 'https://github.com/garora23/NAGP-DevOps-2025.git'
+        BRANCH_NAME = 'main'  // Change to 'master' if your repo uses master
+        BUILD_DIR = 'target'
+    }
+
+    /* ========== STAGES SECTION ========== */
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "=== Checking out source code from ${GIT_URL} (${BRANCH_NAME}) ==="
+                git branch: "${BRANCH_NAME}", url: "${GIT_URL}"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo "=== Running Maven build ==="
+                bat 'mvn clean compile -DskipTests=true'   // Use 'sh' instead of 'bat' for Linux agents
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo "=== Running unit tests ==="
+                bat 'mvn test'
+            }
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('Sonar Analysis') {
+                steps {
+                   withSonarQubeEnv("Test_SonarQube")
+                    {
+                        bat "mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar"
+                    }
+                }
+            }
+
+        stage("Publish to Artifactory"){
+            steps{
+                rtMavenDeployer(
+                    id: 'deployer',
+                    serverId: '9991475747@artifactory',
+                    releaseRepo: 'nagp.session.2025',
+                    snapshotRepo: 'nagp.session.2025'
+                )
+                rtMavenRun(
+                    pom: 'pom.xml',
+                    goals: 'clean install',
+                    deployerId: 'deployer'
+                )
+                rtPublishBuildInfo(
+                    serverId: '9991475747@artifactory',
+                )
+            }
+        }
+
+       
+    }
+
+    /* ========== POST SECTION ========== */
+    post {
+        success {
+            echo "✅ Build completed successfully!"
+        }
+        failure {
+            echo "❌ Build failed. Please check the logs."
+        }
+        always {
+            testNG reportFilenamePattern: '**/target/surefire-reports/testng-results.xml'
+            // Archives the HTML reports for easy viewing
+            archiveArtifacts artifacts: 'target/surefire-reports/*.html', allowEmptyArchive: true
+
+            echo "🔁 Cleaning up workspace..."
+            cleanWs()
+        }
+    }
+}
