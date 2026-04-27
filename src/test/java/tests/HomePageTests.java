@@ -23,7 +23,7 @@ public class HomePageTests extends BaseTest {
     @Test
     public void validateTitle(){
         System.out.println("Validating Title");
-        String expectedTitle = "Online Shopping India Mobile, Cameras, Lifestyle & more Online @ Flipkart.com";
+        String expectedTitle = "Online Shopping Site for Mobiles, Electronics, Furniture, Grocery, Lifestyle, Books & More. Best Offers!";
         String actualTitle=homePage.getTitle();
         Assert.assertEquals(actualTitle,expectedTitle);
     }
